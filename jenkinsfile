@@ -1,0 +1,46 @@
+pipeline {
+    agent any
+    
+    environment {
+        // Docker Hub 
+        REGISTRY_USER = 'dinitha282'
+        // Docker Hub Login
+        DOCKER_CREDS = credentials('docker-hub-login')
+    }
+    
+    stages {
+        stage('Checkout Code') {
+            steps {
+                echo 'Downloading Website Code...'
+            }
+        }
+        
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    def scannerHome = tool 'SonarScanner'
+                    withSonarQubeEnv('SonarServer') {
+                        sh "${scannerHome}/bin/sonar-scanner"
+                    }
+                }
+            }
+        }
+        
+        stage('Build & Push Docker') {
+            steps {
+                sh "docker build -t ${REGISTRY_USER}/simple-website:v1 ."
+                sh "echo $DOCKER_CREDS_PSW | docker login -u $DOCKER_CREDS_USR --password-stdin"
+                sh "docker push ${REGISTRY_USER}/simple-website:v1"
+            }
+        }
+
+        stage('Deploy Website') {
+            steps {
+                
+                sh 'docker stop my-web-container || true'
+                sh 'docker rm my-web-container || true'
+                sh "docker run -d -p 8085:80 --name my-web-container ${REGISTRY_USER}/simple-website:v1"
+            }
+        }
+    }
+}
